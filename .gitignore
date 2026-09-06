@@ -1,0 +1,44 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+/openflow-server
+/openflowctl
+/openflow-operator
+
+# Build outputs
+/dist/
+!pkg/ui/dist/**
+
+# Test binary
+*.test
+*.out
+coverage.out
+
+# Dependency vendor
+vendor/
+
+# Frontend
+web/node_modules/
+docs/node_modules/
+web/dist/
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log

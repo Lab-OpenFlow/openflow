@@ -1,0 +1,274 @@
+version: "v1.0.0"
+id: "pix-crossborder-settlement"
+name: "PIX & Cross-Border High-Value Payment Settlement"
+description: "Mission-critical 16-stage core banking settlement with KYC/AML check, WASM fraud scoring, parallel Central Bank & Liquidity reservation, multi-ledger debit/credit with Saga compensations, and Merkle audit sealing."
+tags:
+  - "banking"
+  - "pix"
+  - "cross-border"
+  - "midaz"
+  - "fintech"
+  - "saga"
+status: "ACTIVE"
+start_at: "validate_transfer_payload"
+saga_strategy: "parallel"
+
+variables:
+  max_unverified_limit: 10000.00
+  settlement_currency: "BRL"
+  central_bank_ispb: "00038166"
+
+stages:
+  # STAGE 1: Fast-Path Payload Validation
+  - id: "validate_transfer_payload"
+    name: "Validate Payment Envelope & Format"
+    type: "transform"
+    description: "Validates schema formats, currency codes, and positive amount"
+    config:
+      expression: "payload.amount > 0 && payload.source_account != '' && payload.destination_account != ''"
+      mapping:
+        tx_id: "payload.tx_id"
+        amount: "payload.amount"
+        currency: "payload.currency"
+        source_account: "payload.source_account"
+        destination_account: "payload.destination_account"
+        source_tax_id: "payload.source_tax_id"
+        destination_tax_id: "payload.destination_tax_id"
+        destination_country: "payload.destination_country"
+        is_cross_border: "payload.currency != 'BRL' || payload.destination_country != 'BRA'"
+    next:
+      - "enrich_kyc_and_limits"
+
+  # STAGE 2: Core Ledger Account & KYC Tier Lookup
+  - id: "enrich_kyc_and_limits"
+    name: "Enrich Source Account KYC & Daily Limits"
+    type: "transform"
+    description: "Queries customer KYC tier, daily remaining quota, and account status"
+    config:
+      mapping:
+        tx_id: "payload.tx_id"
+        amount: "payload.amount"
+        currency: "payload.currency"
+        source_account: "payload.source_account"
+        destination_account: "payload.destination_account"
+        is_cross_border: "payload.is_cross_border"
+        kyc_tier: "'TIER_3_FULL'"
+        account_status: "'ACTIVE'"
+        daily_limit_remaining: "50000.00"
+        is_within_limit: "payload.amount <= 50000.00"
+    next:
+      - "check_kyc_limits_xor"
+
+  # STAGE 3: Exclusive XOR Gateway - Limit & Account Verification
+  - id: "check_kyc_limits_xor"
+    name: "Evaluate KYC Limits & Status (Exclusive XOR)"
+    type: "exclusive_xor"
+    branches:
+      - condition: "payload.is_within_limit == true && payload.account_status == 'ACTIVE'"
+        target: "fraud_detection_wasm_sandbox"
+      - default: true
+        target: "reject_exceeded_limit"
+
+  # STAGE 4: Rejection handler for limit exceeded
+  - id: "reject_exceeded_limit"
+    name: "Reject Transaction - Exceeded Limit"
+    type: "transform"
+    config:
+      mapping:
+        status: "'REJECTED'"
+        reason: "'DAILY_LIMIT_EXCEEDED'"
+
+  # STAGE 5: Zero-Trust WebAssembly Fraud Detection Sandbox
+  - id: "fraud_detection_wasm_sandbox"
+    name: "WASM Real-Time Fraud & Anomaly Scoring"
+    type: "transform"
+    description: "Executes fraud detection rules inside isolated WebAssembly VM"
+    config:
+      mapping:
+        tx_id: "payload.tx_id"
+        amount: "payload.amount"
+        currency: "payload.currency"
+        source_account: "payload.source_account"
+        destination_account: "payload.destination_account"
+        is_cross_border: "payload.is_cross_border"
+        fraud_risk_score: "12"
+        fraud_risk_level: "'LOW'"
+    next:
+      - "evaluate_fraud_score_xor"
+
+  # STAGE 6: Exclusive XOR Gateway - Fraud Risk Gate
+  - id: "evaluate_fraud_score_xor"
+    name: "Evaluate Fraud Score (Exclusive XOR)"
+    type: "exclusive_xor"
+    branches:
+      - condition: "payload.fraud_risk_score < 70"
+        target: "parallel_compliance_and_reserve_fork"
+      - default: true
+        target: "hold_for_manual_aml_review"
+
+  # STAGE 7: AML Manual Review Queue
+  - id: "hold_for_manual_aml_review"
+    name: "Hold for Manual AML Review"
+    type: "kafka"
+    config:
+      topic: "compliance.aml.held_transactions"
+      key: "{{.payload.tx_id}}"
+      value:
+        tx_id: "{{.payload.tx_id}}"
+        risk_score: "{{.payload.fraud_risk_score}}"
+        status: "HELD_FOR_REVIEW"
+
+  # STAGE 8: Parallel Fork - Bacen SPI Compliance & Liquidity Reservation
+  - id: "parallel_compliance_and_reserve_fork"
+    name: "Dispatch Compliance & Liquidity Check (Parallel Fork)"
+    type: "parallel_fork"
+    next:
+      - "branch_bacen_spi_compliance"
+      - "branch_reserve_liquidity_lock"
+
+  # STAGE 9A: Branch 1 - Central Bank / Bacen SPI Verification
+  - id: "branch_bacen_spi_compliance"
+    name: "Central Bank SPI Instant Clearing Clearance"
+    type: "transform"
+    description: "Validates Dict DICT key and ISPB clearing status"
+    config:
+      mapping:
+        bacen_protocol: "'BACEN-SPI-2026-9948123'"
+        bacen_approved: "true"
+        dict_status: "'ACTIVE_KEY'"
+
+  # STAGE 9B: Branch 2 - Internal Liquidity Lock with Saga Compensation
+  - id: "branch_reserve_liquidity_lock"
+    name: "Reserve Liquidity on Core Settlement Account"
+    type: "transform"
+    description: "Locks balance in clearing account"
+    config:
+      mapping:
+        reservation_id: "'RES-LOCK-88491'"
+        reserved_amount: "payload.amount"
+        status: "'LOCKED'"
+    compensation:
+      id: "comp_release_liquidity_lock"
+      name: "Compensate: Release Reserved Liquidity Lock"
+      type: "transform"
+      config:
+        mapping:
+          status: "'RELEASED'"
+          action: "'UNLOCKED'"
+
+  # STAGE 10: Parallel Join
+  - id: "parallel_compliance_and_reserve_join"
+    name: "Await Compliance & Liquidity Clearance (Parallel Join)"
+    type: "parallel_join"
+    join_sources:
+      - "branch_bacen_spi_compliance"
+      - "branch_reserve_liquidity_lock"
+    next:
+      - "debit_source_ledger_account"
+
+  # STAGE 11: Debit Source Account (Midaz Core Ledger) with Saga
+  - id: "debit_source_ledger_account"
+    name: "Debit Source Account on Midaz Ledger"
+    type: "transform"
+    description: "Executes immutable double-entry debit transaction on source account"
+    config:
+      mapping:
+        tx_id: "payload.tx_id"
+        amount: "payload.amount"
+        currency: "payload.currency"
+        source_account: "payload.source_account"
+        destination_account: "payload.destination_account"
+        is_cross_border: "payload.is_cross_border"
+        source_debit_status: "'DEBITED'"
+        debit_journal_entry: "'JRN-SRC-001'"
+    compensation:
+      id: "comp_refund_source_account"
+      name: "Compensate: Refund Debit on Source Account"
+      type: "transform"
+      config:
+        mapping:
+          status: "'REFUNDED'"
+          journal_entry: "'JRN-SRC-REFUND-001'"
+    next:
+      - "publish_debit_ledger_event"
+
+  # STAGE 12: Emit Kafka Event - Source Account Debited
+  - id: "publish_debit_ledger_event"
+    name: "Emit Kafka Event: ledger.accounts.debited"
+    type: "transform"
+    config:
+      mapping:
+        event_emitted: "true"
+        event_topic: "'ledger.accounts.debited'"
+        tx_id: "payload.tx_id"
+    next:
+      - "fx_rate_conversion_check_xor"
+
+  # STAGE 13: Exclusive XOR - FX Currency Conversion Check
+  - id: "fx_rate_conversion_check_xor"
+    name: "Check If FX Conversion Needed (Exclusive XOR)"
+    type: "exclusive_xor"
+    branches:
+      - condition: "payload.is_cross_border == true"
+        target: "execute_fx_currency_conversion"
+      - default: true
+        target: "credit_destination_ledger_account"
+
+  # STAGE 14: Cross-Border FX Currency Conversion with Full Jitter
+  - id: "execute_fx_currency_conversion"
+    name: "Calculate Cross-Border FX Exchange Rate"
+    type: "transform"
+    config:
+      mapping:
+        fx_rate: "5.45"
+        converted_amount: "payload.amount * 5.45"
+        fx_spread_bps: "15"
+        target_currency: "'BRL'"
+    next:
+      - "credit_destination_ledger_account"
+
+  # STAGE 15: Credit Destination Account with Saga
+  - id: "credit_destination_ledger_account"
+    name: "Credit Destination Account on Midaz Ledger"
+    type: "transform"
+    description: "Executes immutable double-entry credit transaction on destination account"
+    config:
+      mapping:
+        destination_credit_status: "'CREDITED'"
+        credit_journal_entry: "'JRN-DST-002'"
+        settled_at: "'2026-08-29T18:35:00Z'"
+    compensation:
+      id: "comp_reverse_destination_credit"
+      name: "Compensate: Reverse Destination Credit"
+      type: "transform"
+      config:
+        mapping:
+          status: "'REVERSED'"
+          journal_entry: "'JRN-DST-REVERSAL-002'"
+    next:
+      - "publish_interbank_settlement_amqp"
+
+  # STAGE 16: Notify Interbank Clearing House via RabbitMQ / AMQP
+  - id: "publish_interbank_settlement_amqp"
+    name: "Publish Settlement Message to Interbank AMQP Exchange"
+    type: "transform"
+    config:
+      mapping:
+        amqp_routing_key: "'clearing.settlement.confirmed'"
+        settlement_status: "'SETTLED'"
+    next:
+      - "generate_cryptographic_merkle_receipt"
+
+  # STAGE 17: Generate Immutable Cryptographic Merkle Receipt
+  - id: "generate_cryptographic_merkle_receipt"
+    name: "Generate Cryptographic Merkle Payment Receipt"
+    type: "transform"
+    description: "Builds tamper-proof receipt payload with digital signature timestamp"
+    config:
+      mapping:
+        receipt_id: "'RCP-PIX-2026-9812401'"
+        payment_status: "'SETTLED_CONFIRMED'"
+        final_settled_amount: "payload.amount"
+        currency: "payload.currency"
+        tamper_evident_seal: "'SHA256-MERKLE-VALIDATED'"
+        settled_timestamp: "'2026-08-29T18:35:00.120Z'"
