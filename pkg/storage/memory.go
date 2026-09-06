@@ -69,7 +69,10 @@ func (m *MemoryWorkflowStore) Create(ctx context.Context, wf *model.Workflow) er
 	m.mu.Lock()
 	defer m.mu.Unlock()
 	if _, exists := m.data[wf.ID]; exists {
-		return ErrAlreadyExists
+		return errors.New("workflow already exists")
+	}
+	if wf.TenantID == "" {
+		wf.TenantID = "default"
 	}
 	clone := *wf
 	m.data[wf.ID] = &clone
@@ -93,6 +96,9 @@ func (m *MemoryWorkflowStore) Update(ctx context.Context, wf *model.Workflow) er
 	if _, exists := m.data[wf.ID]; !exists {
 		return ErrWorkflowNotFound
 	}
+	if wf.TenantID == "" {
+		wf.TenantID = "default"
+	}
 	clone := *wf
 	m.data[wf.ID] = &clone
 	return nil
@@ -114,6 +120,15 @@ func (m *MemoryWorkflowStore) List(ctx context.Context, filter WorkflowFilter) (
 
 	var result []*model.Workflow
 	for _, wf := range m.data {
+		if filter.TenantID != "" {
+			wfTenant := wf.TenantID
+			if wfTenant == "" {
+				wfTenant = "default"
+			}
+			if wfTenant != filter.TenantID {
+				continue
+			}
+		}
 		if filter.Status != "" && wf.Status != filter.Status {
 			continue
 		}
@@ -145,6 +160,9 @@ type MemoryExecutionStore struct {
 func (m *MemoryExecutionStore) Create(ctx context.Context, exec *model.Execution) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+	if exec.TenantID == "" {
+		exec.TenantID = "default"
+	}
 	clone := *exec
 	m.data[exec.ID] = &clone
 	return nil
@@ -179,6 +197,9 @@ func (m *MemoryExecutionStore) Update(ctx context.Context, exec *model.Execution
 	if _, exists := m.data[exec.ID]; !exists {
 		return ErrExecutionNotFound
 	}
+	if exec.TenantID == "" {
+		exec.TenantID = "default"
+	}
 	clone := *exec
 	m.data[exec.ID] = &clone
 	return nil
@@ -190,6 +211,15 @@ func (m *MemoryExecutionStore) List(ctx context.Context, filter ExecutionFilter)
 
 	var result []*model.Execution
 	for _, e := range m.data {
+		if filter.TenantID != "" {
+			eTenant := e.TenantID
+			if eTenant == "" {
+				eTenant = "default"
+			}
+			if eTenant != filter.TenantID {
+				continue
+			}
+		}
 		if filter.WorkflowID != "" && e.WorkflowID != filter.WorkflowID {
 			continue
 		}

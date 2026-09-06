@@ -78,10 +78,13 @@ func RateLimitMiddleware(rate, burst float64) gin.HandlerFunc {
 	limiter := NewIPRateLimiter(rate, burst)
 
 	return func(c *gin.Context) {
-		// Identify client by API Key header if present, fallback to ClientIP
-		clientID := c.GetHeader("X-API-Key")
-		if clientID == "" {
-			clientID = c.ClientIP()
+		// Identify client by Tenant, API Key header if present, or fallback to ClientIP
+		clientID := c.GetString("tenant_id")
+		if clientID == "" || clientID == "default" {
+			clientID = c.GetHeader("X-API-Key")
+			if clientID == "" {
+				clientID = c.ClientIP()
+			}
 		}
 
 		bucket := limiter.GetBucket(clientID)

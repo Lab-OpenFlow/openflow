@@ -65,6 +65,7 @@ type StepExecution struct {
 
 // Execution represents a workflow runtime instance.
 type Execution struct {
+	TenantID       string                 `json:"tenant_id,omitempty"`
 	ID             string                 `json:"id"`
 	WorkflowID     string                 `json:"workflow_id"`
 	WorkflowName   string                 `json:"workflow_name"`

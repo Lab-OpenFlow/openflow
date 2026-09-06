@@ -410,6 +410,12 @@ func (s *PostgresWorkflowStore) List(ctx context.Context, filter WorkflowFilter)
 	var args []interface{}
 	idx := 1
 
+	if filter.TenantID != "" {
+		conditions = append(conditions, fmt.Sprintf("COALESCE(tenant_id, 'default') = $%d", idx))
+		args = append(args, filter.TenantID)
+		idx++
+	}
+
 	if filter.Status != "" {
 		conditions = append(conditions, fmt.Sprintf("status = $%d", idx))
 		args = append(args, string(filter.Status))
@@ -610,6 +616,12 @@ func (s *PostgresExecutionStore) List(ctx context.Context, filter ExecutionFilte
 	var conditions []string
 	var args []interface{}
 	idx := 1
+
+	if filter.TenantID != "" {
+		conditions = append(conditions, fmt.Sprintf("COALESCE(tenant_id, 'default') = $%d", idx))
+		args = append(args, filter.TenantID)
+		idx++
+	}
 
 	if filter.WorkflowID != "" {
 		conditions = append(conditions, fmt.Sprintf("workflow_id = $%d", idx))

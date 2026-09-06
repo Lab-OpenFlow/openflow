@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [0.2.0] - 2026-09-06
+
+### Added
+- **Multi-Tenancy & Namespaces**: Native tenant isolation (`TenantID` / `X-Tenant-ID` / `X-Namespace`) across all models, PostgreSQL/Memory storage engines, workflow/execution filters, and context propagation.
+- **Tenant Rate Limiting**: Intelligent rate limiting prioritizing tenant namespaces before API keys/IP fallback.
+- **DMN (Decision Model and Notation) Engine**: High-performance declarative decision table evaluation in pure Go with zero JVM overhead.
+- **DMN Hit Policies**: Support for `first`, `collect`, and `rule_order` hit policies with numeric comparison operators, list membership (`in [...]`), ranges/intervals (`[min..max]`), and default rules (`-`).
+- **DMN Connector**: Pluggable connector (`type: dmn`) registered in the core runtime and exposed to DAG workflows.
+
 ## [0.1.0] - 2026-09-06
 
 ### Added

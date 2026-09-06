@@ -79,6 +79,7 @@ const (
 	StageTypeWaitForSignal StageType = "wait_for_signal"
 	StageTypeChildWorkflow StageType = "child_workflow"
 	StageTypeWorkerTask    StageType = "worker_task"
+	StageTypeDMN           StageType = "dmn"
 )
 
 // OverlapPolicy controls behavior when a scheduled cron triggers while previous execution is still running.
@@ -144,6 +145,7 @@ type UIMetadata struct {
 
 // Workflow represents a complete declarative workflow definition.
 type Workflow struct {
+	TenantID     string               `json:"tenant_id,omitempty" yaml:"tenant_id,omitempty"`
 	Version      string               `json:"version" yaml:"version"`
 	ID           string               `json:"id" yaml:"id"`
 	Name         string               `json:"name" yaml:"name"`

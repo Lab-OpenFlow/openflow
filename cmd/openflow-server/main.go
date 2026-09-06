@@ -13,6 +13,7 @@ import (
 	"github.com/Lab-OpenFlow/openflow/pkg/api"
 	"github.com/Lab-OpenFlow/openflow/pkg/connectors"
 	connDB "github.com/Lab-OpenFlow/openflow/pkg/connectors/database"
+	connDMN "github.com/Lab-OpenFlow/openflow/pkg/connectors/dmn"
 	connGRPC "github.com/Lab-OpenFlow/openflow/pkg/connectors/grpc"
 	connHTTP "github.com/Lab-OpenFlow/openflow/pkg/connectors/http"
 	connKafka "github.com/Lab-OpenFlow/openflow/pkg/connectors/kafka"
@@ -104,6 +105,7 @@ func main() {
 	registry.Register(connKafka.NewKafkaConnector(kafkaBrokers))
 	registry.Register(connRabbit.NewRabbitMQConnector(rabbitURLEnv))
 	registry.Register(connTransform.NewTransformConnector())
+	registry.Register(connDMN.NewDMNConnector())
 	registry.Register(connDB.NewDatabaseConnector())
 	registry.Register(connWS.NewWebSocketConnector())
 	registry.Register(connGRPC.NewGRPCConnector())

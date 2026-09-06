@@ -19,6 +19,7 @@ var (
 
 // WorkflowFilter defines criteria for querying workflows.
 type WorkflowFilter struct {
+	TenantID string
 	Status model.WorkflowStatus
 	Search string
 	Tag    string
@@ -29,6 +30,7 @@ type WorkflowFilter struct {
 
 // ExecutionFilter defines criteria for querying executions.
 type ExecutionFilter struct {
+	TenantID   string
 	WorkflowID string
 	Status     model.ExecutionStatus
 	TraceID    string

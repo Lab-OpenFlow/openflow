@@ -13,6 +13,7 @@ const (
 	ConnectorTypeTransform ConnectorType = "transform"
 	ConnectorTypeScript    ConnectorType = "script"
 	ConnectorTypeWasm      ConnectorType = "wasm"
+	ConnectorTypeDMN       ConnectorType = "dmn"
 )
 
 // ConnectorDescriptor describes a connector's capabilities, inputs, and schemas for the UI & validation.

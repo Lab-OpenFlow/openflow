@@ -420,7 +420,13 @@ func (e *Engine) Execute(ctx context.Context, workflowID string, input map[strin
 		input = structuredInput
 	}
 
+	tenantID := security.GetTenant(ctx)
+	if wf.TenantID != "" {
+		tenantID = wf.TenantID
+	}
+
 	exec := &model.Execution{
+		TenantID:       tenantID,
 		ID:             execID,
 		WorkflowID:     wf.ID,
 		WorkflowName:   wf.Name,

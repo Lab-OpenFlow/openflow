@@ -165,3 +165,74 @@ func TestServerHashRingShardedExecution(t *testing.T) {
 		t.Fatalf("expected X-OpenFlow-Node to be 'node-alpha', got '%s'", rec.Header().Get("X-OpenFlow-Node"))
 	}
 }
+
+func TestAPIServerMultiTenancy(t *testing.T) {
+	store := storage.NewMemoryStore()
+	registry := connectors.NewRegistry()
+	registry.Register(connTransform.NewTransformConnector())
+	eng := engine.NewEngine(store, registry)
+
+	server := api.NewServer(api.ServerConfig{}, eng, store, registry)
+	router := server.Router()
+
+	// 1. Create workflow under tenant-a
+	wfA := model.Workflow{
+		Version: "v1",
+		ID:      "wf-tenant-a",
+		Name:    "Tenant A Workflow",
+		Status:  model.WorkflowStatusActive,
+		StartAt: "s1",
+		Stages: []model.Stage{
+			{ID: "s1", Name: "Step 1", Type: model.StageTypeTransform},
+		},
+	}
+	wfBytesA, _ := json.Marshal(wfA)
+	reqA, _ := http.NewRequest("POST", "/api/v1/workflows", bytes.NewReader(wfBytesA))
+	reqA.Header.Set("Content-Type", "application/json")
+	reqA.Header.Set("X-Tenant-ID", "tenant-alpha")
+	recA := httptest.NewRecorder()
+	router.ServeHTTP(recA, reqA)
+	if recA.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created for tenant-alpha, got %d", recA.Code)
+	}
+
+	// 2. Query workflows with tenant-beta (should be empty)
+	reqBeta, _ := http.NewRequest("GET", "/api/v1/workflows", nil)
+	reqBeta.Header.Set("X-Tenant-ID", "tenant-beta")
+	recBeta := httptest.NewRecorder()
+	router.ServeHTTP(recBeta, reqBeta)
+	if recBeta.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for tenant-beta, got %d", recBeta.Code)
+	}
+
+	var respBeta struct {
+		Workflows []model.Workflow `json:"workflows"`
+		Total     int              `json:"total"`
+	}
+	if err := json.Unmarshal(recBeta.Body.Bytes(), &respBeta); err != nil {
+		t.Fatalf("failed to unmarshal beta response: %v", err)
+	}
+	if len(respBeta.Workflows) != 0 {
+		t.Fatalf("expected 0 workflows for tenant-beta, got %d", len(respBeta.Workflows))
+	}
+
+	// 3. Query workflows with tenant-alpha (should have 1)
+	reqAlpha, _ := http.NewRequest("GET", "/api/v1/workflows", nil)
+	reqAlpha.Header.Set("X-Tenant-ID", "tenant-alpha")
+	recAlpha := httptest.NewRecorder()
+	router.ServeHTTP(recAlpha, reqAlpha)
+	if recAlpha.Code != http.StatusOK {
+		t.Fatalf("expected 200 OK for tenant-alpha, got %d", recAlpha.Code)
+	}
+
+	var respAlpha struct {
+		Workflows []model.Workflow `json:"workflows"`
+		Total     int              `json:"total"`
+	}
+	if err := json.Unmarshal(recAlpha.Body.Bytes(), &respAlpha); err != nil {
+		t.Fatalf("failed to unmarshal alpha response: %v", err)
+	}
+	if len(respAlpha.Workflows) != 1 || respAlpha.Workflows[0].ID != "wf-tenant-a" {
+		t.Fatalf("expected 1 workflow 'wf-tenant-a' for tenant-alpha, got %v", respAlpha.Workflows)
+	}
+}

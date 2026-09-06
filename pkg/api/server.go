@@ -54,11 +54,26 @@ func NewServer(cfg ServerConfig, eng *engine.Engine, store storage.Store, reg *c
 	router.Use(func(c *gin.Context) {
 		c.Writer.Header().Set("Access-Control-Allow-Origin", "*")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key")
+		c.Writer.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, X-API-Key, X-Tenant-ID, X-Namespace, X-Idempotency-Key")
 		if c.Request.Method == "OPTIONS" {
 			c.AbortWithStatus(http.StatusNoContent)
 			return
 		}
+		c.Next()
+	})
+
+	// Tenant Extraction Middleware (Multi-Tenancy / Namespaces)
+	router.Use(func(c *gin.Context) {
+		tenantID := c.GetHeader("X-Tenant-ID")
+		if tenantID == "" {
+			tenantID = c.GetHeader("X-Namespace")
+		}
+		if tenantID == "" {
+			tenantID = security.DefaultTenant
+		}
+		ctx := security.WithTenant(c.Request.Context(), tenantID)
+		c.Request = c.Request.WithContext(ctx)
+		c.Set("tenant_id", tenantID)
 		c.Next()
 	})
 
@@ -220,10 +235,19 @@ func (s *Server) listConnectors(c *gin.Context) {
 }
 
 func (s *Server) listWorkflows(c *gin.Context) {
+	tenantID := c.GetString("tenant_id")
+	if qTenant := c.Query("tenant_id"); qTenant != "" {
+		tenantID = qTenant
+	}
+	if c.Query("all_tenants") == "true" {
+		tenantID = ""
+	}
+
 	filter := storage.WorkflowFilter{
-		Search: c.Query("search"),
-		Tag:    c.Query("tag"),
-		Status: model.WorkflowStatus(c.Query("status")),
+		TenantID: tenantID,
+		Search:   c.Query("search"),
+		Tag:      c.Query("tag"),
+		Status:   model.WorkflowStatus(c.Query("status")),
 	}
 
 	wfs, total, err := s.store.Workflows().List(c.Request.Context(), filter)
@@ -263,6 +287,13 @@ func (s *Server) createWorkflow(c *gin.Context) {
 	if wf.ID == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "workflow id is required"})
 		return
+	}
+
+	if wf.TenantID == "" {
+		wf.TenantID = c.GetString("tenant_id")
+	}
+	if wf.TenantID == "" {
+		wf.TenantID = security.DefaultTenant
 	}
 
 	if wf.Status == "" {
@@ -383,7 +414,8 @@ func (s *Server) executeWorkflow(c *gin.Context) {
 	}
 
 	// Use background context detached from HTTP request cancellation so asynchronous workflow execution finishes cleanly
-	bgCtx := context.Background()
+	tenantID := c.GetString("tenant_id")
+	bgCtx := security.WithTenant(context.Background(), tenantID)
 	exec, err := s.engine.Execute(bgCtx, id, payload, model.TriggerTypeManual)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -569,7 +601,16 @@ func (s *Server) handleWebhookTrigger(c *gin.Context) {
 }
 
 func (s *Server) listExecutions(c *gin.Context) {
+	tenantID := c.GetString("tenant_id")
+	if qTenant := c.Query("tenant_id"); qTenant != "" {
+		tenantID = qTenant
+	}
+	if c.Query("all_tenants") == "true" {
+		tenantID = ""
+	}
+
 	filter := storage.ExecutionFilter{
+		TenantID:   tenantID,
 		WorkflowID: c.Query("workflow_id"),
 		Status:     model.ExecutionStatus(c.Query("status")),
 	}
