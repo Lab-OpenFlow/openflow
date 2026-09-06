@@ -7,6 +7,7 @@
 [![Go Version](https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat&logo=go)](https://golang.org)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 [![CI](https://github.com/Lab-OpenFlow/openflow/actions/workflows/ci.yml/badge.svg)](https://github.com/Lab-OpenFlow/openflow/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/Docs-VitePress-brightgreen)](https://lab-openflow.github.io/openflow-docs/)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=flat&logo=docker)](https://github.com/Lab-OpenFlow/openflow-deploy)
 
 *BPMN-inspired, Goroutine-powered modular orchestration engine connecting Kafka, RabbitMQ, HTTP/REST, gRPC, WebSockets, Databases, and WebAssembly.*
