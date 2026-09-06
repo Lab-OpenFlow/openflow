@@ -27,6 +27,7 @@ OpenFlow is organized as modular, specialized repositories under the [`Lab-OpenF
 | [**`openflow-docs`**](https://github.com/Lab-OpenFlow/openflow-docs) | Official Documentation Website & Guides | VitePress |
 | [**`openflow-examples`**](https://github.com/Lab-OpenFlow/openflow-examples) | Production Workflows & E2E Simulation Scripts | YAML / Python |
 | [**`openflow-go-sdk`**](https://github.com/Lab-OpenFlow/openflow-go-sdk) | Official Go Client SDK | Go |
+| [**`openflow-java-sdk`**](https://github.com/Lab-OpenFlow/openflow-java-sdk) | Official JVM Client SDK (Java & Kotlin) | Java / Kotlin |
 | [**`openflow-python-sdk`**](https://github.com/Lab-OpenFlow/openflow-python-sdk) | Official Python Client SDK | Python |
 | [**`openflow-ts-sdk`**](https://github.com/Lab-OpenFlow/openflow-ts-sdk) | Official TypeScript / JavaScript Client SDK | TypeScript |
 
